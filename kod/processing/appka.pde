@@ -160,6 +160,20 @@ void keyPressed() {
   }
 }
 
+void serialEvent (Serial port) { 
+  data = port.readStringUntil('.');
+  if (data != null) {
+    data = data.substring(0, data.length()-1);
+    index1 = data.indexOf(",");
+    if (index1 > -1) {
+      angle= data.substring(0, index1);
+      distance= data.substring(index1+1, data.length());
+      iAngle = int(angle);
+      iDistance = int(distance);
+    }
+  }
+}
+
 void drawRadar() {
   pushMatrix();
   translate(width/2, height-height*0.074);
