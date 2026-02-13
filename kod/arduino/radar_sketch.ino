@@ -8,17 +8,104 @@
 long duration;
 int distance;
 int opState = 0;
+int servoPos = 90; 
+int stepDir = 1; 
 
 Servo servo;
 
-int lastButtonState = LOW;
 unsigned long lastDebounceTime = 0;
 const unsigned long debounceMs = 40;
+int lastButtonState = LOW;
 
-
-bool ledBlinkState = false;
 unsigned long lastBlinkMs = 0;
 const unsigned long blinkPeriodMs = 200;
+bool ledBlinkState = false;
+
+unsigned long lastServoMoveMs = 0;
+const int servoInterval = 15; 
+
+void setup() {
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(buttonPin, INPUT);
+  pinMode(ledPin, OUTPUT);
+  servo.attach(6);
+  servo.write(servoPos);
+  Serial.begin(9600);
+}
+
+void loop() {
+  handleButton();
+  handleKeyboard();
+
+  if (opState == 1) {
+    autoScan();
+  }
+  
+  updateLed(); 
+}
+
+void handleButton() {
+  int reading = digitalRead(buttonPin);
+  if (reading != lastButtonState) lastDebounceTime = millis();
+
+  if ((millis() - lastDebounceTime) > debounceMs) {
+    static int stableState = LOW;
+    if (reading != stableState) {
+      stableState = reading;
+      if (stableState == HIGH) opState = !opState;
+    }
+  }
+  lastButtonState = reading;
+}
+
+void handleKeyboard() {
+  if (Serial.available() > 0) {
+    char key = Serial.read();
+    if (key == 'd') { 
+      opState = 0;
+      servoPos = constrain(servoPos - 1, 15, 165);
+      servo.write(servoPos);
+      calculateDistance();
+      sendData();
+    } 
+    else if (key == 'a') { 
+      opState = 0;
+      servoPos = constrain(servoPos + 1, 15, 165);
+      servo.write(servoPos);
+      calculateDistance();
+      sendData();
+    } 
+    else if (key == 'm') { 
+      opState = !opState;
+    }
+  }
+}
+
+void autoScan() {
+  if (millis() - lastServoMoveMs >= servoInterval) {
+    lastServoMoveMs = millis();
+    servoPos += stepDir;
+    if (servoPos >= 165 || servoPos <= 15) stepDir *= -1;
+    
+    servo.write(servoPos);
+    calculateDistance();
+    sendData();
+  }
+}
+
+void updateLed() {
+  if (opState == 0) {
+    digitalWrite(ledPin, HIGH);
+  } else {
+    
+    if (millis() - lastBlinkMs >= blinkPeriodMs) {
+      lastBlinkMs = millis();
+      ledBlinkState = !ledBlinkState;
+      digitalWrite(ledPin, ledBlinkState ? HIGH : LOW);
+    }
+  }
+}
 
 int calculateDistance() {
   digitalWrite(trigPin, LOW);
@@ -31,83 +118,9 @@ int calculateDistance() {
   return distance;
 }
 
-void setup() {
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
-  pinMode(buttonPin, INPUT);
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
-  servo.attach(6);
-  Serial.begin(9600);
-}
-
-void handleButton() {
-  int reading = digitalRead(buttonPin);
-
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
-  }
-
-  if ((millis() - lastDebounceTime) > debounceMs) {
-    static int stableState = LOW;
-    if (reading != stableState) {
-      stableState = reading;
-      if (stableState == HIGH) {
-        opState = !opState;
-      }
-    }
-  }
-  lastButtonState = reading;
-}
-
-void updateLed(bool running) {
-    if (opState == 0) {
-        digitalWrite(ledPin, HIGH);
-        return;
-    }
-    
-    unsigned long now = millis();
-    if (now - lastBlinkMs >= blinkPeriodMs) {
-        lastBlinkMs = now;
-        ledBlinkState = !ledBlinkState;
-        digitalWrite(ledPin, ledBlinkState ? HIGH : LOW);
-    }
-}
-
-void loop() {
-  handleButton();
-
-  bool running = false;
-
-  if (opState == 1) {
-    for (int i = 15; i <= 165; i++) {
-      running = true;
-      servo.write(i);
-      delay(15);
-      calculateDistance();
-      Serial.print(i);
-      Serial.print(",");
-      Serial.print(distance);
-      Serial.print(".");
-      handleButton();
-      updateLed(running);
-      if (opState == 0) break;
-    }
-
-    for (int i = 165; i >= 15 && opState == 1; i--) {
-      running = true;
-      servo.write(i);
-      delay(15);
-      calculateDistance();
-      Serial.print(i);
-      Serial.print(",");
-      Serial.print(distance);
-      Serial.print(".");
-      handleButton();
-      updateLed(running);
-      if (opState == 0) break;
-    }
-  }
-
-  updateLed(running);
+void sendData() {
+  Serial.print(servoPos);
+  Serial.print(",");
+  Serial.print(distance);
+  Serial.print(".");
 }
